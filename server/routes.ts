@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
-import { calorieFilterSchema } from "@shared/schema";
+import { calorieFilterSchema } from "../shared/schema.js";
 import { setupAuth } from "./auth.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
