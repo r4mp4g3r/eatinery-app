@@ -2,13 +2,15 @@ import { useParams, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Clock, TrendingUp } from "lucide-react";
-import { Restaurant, WalkingDirection } from "@shared/schema";
+import { ChevronLeft, Clock, TrendingUp, Map, MapPin } from "lucide-react";
+import { Restaurant, WalkingDirection, DirectionStep } from "@shared/schema";
 import LeafletMap from "@/components/ui/leaflet-map";
+import { useState } from "react";
 
 export default function WalkingDirections() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const [walkingStarted, setWalkingStarted] = useState(false);
   
   // Fetch restaurant details
   const { data: restaurant, isLoading: isLoadingRestaurant } = useQuery<Restaurant>({
@@ -67,7 +69,7 @@ export default function WalkingDirections() {
           <h2 className="text-lg font-bold text-neutral-800 mb-2">Information Not Found</h2>
           <p className="text-neutral-500 mb-4">The walking directions you're looking for couldn't be loaded.</p>
           <Link href="/">
-            <a className="text-primary font-medium">Go back to home</a>
+            <div className="text-primary font-medium cursor-pointer">Go back to home</div>
           </Link>
         </div>
       </div>
@@ -90,9 +92,9 @@ export default function WalkingDirections() {
             className="h-56"
           />
           <Link href={`/restaurant/${restaurant.id}`}>
-            <a className="absolute top-4 left-4 p-2 rounded-full bg-white/80 backdrop-blur-sm">
+            <div className="absolute top-4 left-4 p-2 rounded-full bg-white/80 backdrop-blur-sm cursor-pointer">
               <ChevronLeft className="h-5 w-5 text-neutral-700" />
-            </a>
+            </div>
           </Link>
         </div>
         
@@ -135,13 +137,13 @@ export default function WalkingDirections() {
             <h4 className="font-medium text-sm text-neutral-700 mb-2">Walking Directions</h4>
             
             <div className="space-y-3">
-              {directions.steps.map((step, index) => (
+              {(directions.steps as DirectionStep[]).map((step: DirectionStep, index: number) => (
                 <div key={index} className="flex">
                   <div className="mr-3 flex flex-col items-center">
                     <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white text-xs font-medium">
                       {step.stepNumber}
                     </div>
-                    {index < directions.steps.length - 1 && (
+                    {index < (directions.steps as DirectionStep[]).length - 1 && (
                       <div className="w-0.5 h-full bg-neutral-200 my-1"></div>
                     )}
                   </div>
@@ -157,13 +159,54 @@ export default function WalkingDirections() {
           </div>
           
           <div className="flex space-x-3">
-            <Button variant="outline" className="flex-1">
+            <Button 
+              variant="outline" 
+              className="flex-1"
+              onClick={() => {
+                // Create Google Maps URL with origin and destination
+                const mapUrl = `https://www.google.com/maps/dir/?api=1&origin=${currentLocation[0]},${currentLocation[1]}&destination=${restaurantLocation[0]},${restaurantLocation[1]}&travelmode=walking`;
+                // Open in new tab
+                window.open(mapUrl, '_blank');
+                toast({
+                  title: "Opened in Google Maps",
+                  description: "Directions have been opened in Google Maps",
+                });
+              }}
+            >
+              <Map className="h-4 w-4 mr-2" />
               Open in Maps
             </Button>
-            <Button className="flex-1">
-              Start Walking
+            <Button 
+              className="flex-1"
+              onClick={() => {
+                setWalkingStarted(!walkingStarted);
+                toast({
+                  title: walkingStarted ? "Walking paused" : "Walking started",
+                  description: walkingStarted 
+                    ? "You've paused your walking journey." 
+                    : "Your walking journey has started! Follow the directions.",
+                });
+              }}
+            >
+              {walkingStarted ? "Pause Walking" : "Start Walking"}
             </Button>
           </div>
+          
+          {walkingStarted && (
+            <div className="mt-4 p-3 bg-success/10 border border-success/20 rounded-lg">
+              <div className="flex items-center">
+                <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center mr-3">
+                  <MapPin className="h-5 w-5 text-success" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-success">Walking in Progress</h4>
+                  <p className="text-sm text-neutral-700">
+                    {directions.totalTimeMinutes} min • {directions.totalDistanceMeters}m • {directions.caloriesBurned} kcal
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
