@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -6,11 +6,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Restaurant, MenuItem } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { MapPin, Star, Plus, Clock } from "lucide-react";
+import { MapPin, Star, Plus, Clock, Check } from "lucide-react";
 import { getCalorieClass } from "@/lib/utils/distance-calculator";
 
 interface RestaurantWithMenuItems extends Restaurant {
   recommendedMenuItems: MenuItem[];
+}
+
+interface OrderItem extends MenuItem {
+  quantity: number;
+  restaurantName: string;
 }
 
 export default function Home() {
@@ -20,6 +25,50 @@ export default function Home() {
   const [mealType, setMealType] = useState<string>("Any Meal");
   const [isHpbHealthy, setIsHpbHealthy] = useState<boolean>(true);
   const [location, setLocation] = useState<string>("Jurong East MRT");
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  
+  // Load orders from localStorage on component mount
+  useEffect(() => {
+    const savedOrders = localStorage.getItem('orderItems');
+    if (savedOrders) {
+      try {
+        setOrderItems(JSON.parse(savedOrders));
+      } catch (e) {
+        console.error('Failed to parse saved orders', e);
+      }
+    }
+  }, []);
+  
+  // Save orders to localStorage when changed
+  useEffect(() => {
+    localStorage.setItem('orderItems', JSON.stringify(orderItems));
+  }, [orderItems]);
+  
+  // Function to add item to order
+  const addToOrder = (menuItem: MenuItem, restaurantName: string) => {
+    setOrderItems(prevItems => {
+      // Check if item already exists in order
+      const existingItemIndex = prevItems.findIndex(item => item.id === menuItem.id);
+      
+      if (existingItemIndex >= 0) {
+        // Update quantity if item exists
+        const updatedItems = [...prevItems];
+        updatedItems[existingItemIndex] = {
+          ...updatedItems[existingItemIndex],
+          quantity: updatedItems[existingItemIndex].quantity + 1
+        };
+        return updatedItems;
+      } else {
+        // Add new item with quantity 1
+        return [...prevItems, { ...menuItem, quantity: 1, restaurantName }];
+      }
+    });
+    
+    toast({
+      title: "Added to order",
+      description: `${menuItem.name} added to your order.`,
+    });
+  };
 
   // Query to filter restaurants based on selections
   const { data: restaurants, isLoading, error } = useQuery<RestaurantWithMenuItems[]>({
@@ -64,7 +113,7 @@ export default function Home() {
               <label htmlFor="calorieLimit" className="block text-sm font-medium text-neutral-700 mb-1">
                 Daily Calorie Limit
               </label>
-              <div className="flex space-x-3">
+              <div className="flex flex-wrap space-x-3">
                 <Button
                   onClick={() => setCalorieLimit(1200)}
                   variant={calorieLimit === 1200 ? "default" : "outline"}
@@ -86,13 +135,27 @@ export default function Home() {
                 >
                   1800 kcal
                 </Button>
-                <Button
-                  onClick={() => setCalorieLimit(2000)}
-                  variant={calorieLimit === 2000 ? "default" : "outline"}
-                  className={calorieLimit === 2000 ? "bg-primary" : ""}
-                >
-                  Custom
-                </Button>
+                <div className="flex mt-2 sm:mt-0">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={calorieLimit !== 1200 && calorieLimit !== 1500 && calorieLimit !== 1800 ? calorieLimit : ""}
+                      onChange={(e) => setCalorieLimit(parseInt(e.target.value) || 2000)}
+                      placeholder="Custom"
+                      className="w-24 h-10 rounded-l-lg border border-r-0 border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-sm text-muted-foreground">
+                      kcal
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => setCalorieLimit(parseInt((document.querySelector('input[type="number"]') as HTMLInputElement).value) || 2000)}
+                    className="h-10 rounded-l-none"
+                  >
+                    Apply
+                  </Button>
+                </div>
               </div>
             </div>
             
@@ -174,7 +237,21 @@ export default function Home() {
             <MapPin className="h-5 w-5 text-primary mr-2" />
             <span className="text-sm text-neutral-700 font-medium">Near {location}</span>
           </div>
-          <button className="text-primary text-sm font-medium">Change</button>
+          <button 
+            className="text-primary text-sm font-medium"
+            onClick={() => {
+              const newLocation = window.prompt("Enter your location:", location);
+              if (newLocation && newLocation.trim() !== "") {
+                setLocation(newLocation.trim());
+                toast({
+                  title: "Location updated",
+                  description: `Location changed to: ${newLocation.trim()}`,
+                });
+              }
+            }}
+          >
+            Change
+          </button>
         </div>
       </div>
 
@@ -261,8 +338,14 @@ export default function Home() {
                             </div>
                           </div>
                         </div>
-                        <button className="p-2 rounded-full bg-primary/10 text-primary">
-                          <Plus className="h-5 w-5" />
+                        <button 
+                          className="p-2 rounded-full bg-primary/10 text-primary"
+                          onClick={() => addToOrder(menuItem, restaurant.name)}
+                        >
+                          {orderItems.some(item => item.id === menuItem.id) ? 
+                            <Check className="h-5 w-5" /> : 
+                            <Plus className="h-5 w-5" />
+                          }
                         </button>
                       </div>
                     ))}
