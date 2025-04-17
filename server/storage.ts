@@ -3,8 +3,11 @@ import {
   MenuItem, InsertMenuItem,
   WalkingDirection, InsertWalkingDirection,
   DirectionStep,
-  User, InsertUser 
+  User, InsertUser,
+  users, restaurants, menuItems, walkingDirections
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, lte } from "drizzle-orm";
 
 // Storage interface
 export interface IStorage {
@@ -31,45 +34,20 @@ export interface IStorage {
   createWalkingDirections(walkingDirection: InsertWalkingDirection): Promise<WalkingDirection>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private restaurants: Map<number, Restaurant>;
-  private menuItems: Map<number, MenuItem>;
-  private walkingDirections: Map<number, WalkingDirection>;
-  private userCurrentId: number;
-  private restaurantCurrentId: number;
-  private menuItemCurrentId: number;
-  private walkingDirectionsCurrentId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.restaurants = new Map();
-    this.menuItems = new Map();
-    this.walkingDirections = new Map();
-    this.userCurrentId = 1;
-    this.restaurantCurrentId = 1;
-    this.menuItemCurrentId = 1;
-    this.walkingDirectionsCurrentId = 1;
-    
-    // Initialize with some sample data
-    this.initializeData();
-  }
-
+export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userCurrentId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
@@ -78,70 +56,85 @@ export class MemStorage implements IStorage {
     cuisineType?: string, 
     isHpbHealthy?: boolean
   ): Promise<Restaurant[]> {
-    let restaurants = Array.from(this.restaurants.values());
+    let query = db.select().from(restaurants);
     
+    // Apply filters if provided
+    const filters = [];
     if (cuisineType) {
-      restaurants = restaurants.filter(r => r.cuisineType === cuisineType);
+      filters.push(eq(restaurants.cuisineType, cuisineType));
     }
     
     if (isHpbHealthy !== undefined) {
-      restaurants = restaurants.filter(r => r.isHpbHealthy === isHpbHealthy);
+      filters.push(eq(restaurants.isHpbHealthy, isHpbHealthy));
     }
     
-    return restaurants;
+    if (filters.length > 0) {
+      query = query.where(and(...filters));
+    }
+    
+    return await query;
   }
 
   async getRestaurantById(id: number): Promise<Restaurant | undefined> {
-    return this.restaurants.get(id);
+    const [restaurant] = await db.select().from(restaurants).where(eq(restaurants.id, id));
+    return restaurant;
   }
 
   async createRestaurant(insertRestaurant: InsertRestaurant): Promise<Restaurant> {
-    const id = this.restaurantCurrentId++;
-    const restaurant: Restaurant = { ...insertRestaurant, id };
-    this.restaurants.set(id, restaurant);
+    const [restaurant] = await db.insert(restaurants).values(insertRestaurant).returning();
     return restaurant;
   }
 
   // Menu item operations
   async getMenuItems(restaurantId: number, calorieLimit?: number): Promise<MenuItem[]> {
-    let items = Array.from(this.menuItems.values())
-      .filter(item => item.restaurantId === restaurantId);
-    
     if (calorieLimit) {
-      items = items.filter(item => item.calories <= calorieLimit);
+      return await db.select().from(menuItems).where(
+        and(
+          eq(menuItems.restaurantId, restaurantId),
+          lte(menuItems.calories, calorieLimit)
+        )
+      );
+    } else {
+      return await db.select().from(menuItems).where(
+        eq(menuItems.restaurantId, restaurantId)
+      );
     }
-    
-    return items;
   }
 
   async getMenuItemById(id: number): Promise<MenuItem | undefined> {
-    return this.menuItems.get(id);
+    const [menuItem] = await db.select().from(menuItems).where(eq(menuItems.id, id));
+    return menuItem;
   }
 
   async createMenuItem(insertMenuItem: InsertMenuItem): Promise<MenuItem> {
-    const id = this.menuItemCurrentId++;
-    const menuItem: MenuItem = { ...insertMenuItem, id };
-    this.menuItems.set(id, menuItem);
+    const [menuItem] = await db.insert(menuItems).values(insertMenuItem).returning();
     return menuItem;
   }
 
   // Walking directions operations
   async getWalkingDirections(restaurantId: number): Promise<WalkingDirection | undefined> {
-    return Array.from(this.walkingDirections.values())
-      .find(direction => direction.restaurantId === restaurantId);
+    const [direction] = await db.select().from(walkingDirections).where(eq(walkingDirections.restaurantId, restaurantId));
+    return direction;
   }
 
   async createWalkingDirections(insertWalkingDirection: InsertWalkingDirection): Promise<WalkingDirection> {
-    const id = this.walkingDirectionsCurrentId++;
-    const walkingDirection: WalkingDirection = { ...insertWalkingDirection, id };
-    this.walkingDirections.set(id, walkingDirection);
+    const [walkingDirection] = await db.insert(walkingDirections).values(insertWalkingDirection).returning();
     return walkingDirection;
   }
 
-  // Initialize data with Korean restaurants
-  private initializeData() {
+  // Initialize sample data
+  async initializeData() {
+    // Check if we already have restaurants
+    const existingRestaurants = await db.select().from(restaurants);
+    if (existingRestaurants.length > 0) {
+      console.log("Database already contains data, skipping initialization");
+      return;
+    }
+
+    console.log("Initializing database with sample data");
+
     // Initialize restaurants
-    const seoulGarden = this.createRestaurant({
+    const [seoulGarden] = await db.insert(restaurants).values({
       name: "Seoul Garden",
       cuisineType: "Korean",
       location: "JEM Shopping Mall, #03-14",
@@ -154,9 +147,9 @@ export class MemStorage implements IStorage {
       address: "JEM Shopping Mall, #03-14, 50 Jurong Gateway Rd",
       distanceInMeters: 650,
       walkTimeMinutes: 8
-    });
+    }).returning();
 
-    const kGrill = this.createRestaurant({
+    const [kGrill] = await db.insert(restaurants).values({
       name: "K-Grill BBQ",
       cuisineType: "Korean",
       location: "Jurong East",
@@ -169,79 +162,80 @@ export class MemStorage implements IStorage {
       address: "Jurong East Street 31, #01-22",
       distanceInMeters: 250,
       walkTimeMinutes: 3
-    });
+    }).returning();
 
     // Initialize menu items for Seoul Garden
-    this.createMenuItem({
-      restaurantId: 1,
-      name: "Veggie Bibimbap",
-      description: "Mixed vegetables, rice, egg, gochujang sauce",
-      calories: 420,
-      price: 12.90,
-      protein: 12,
-      carbs: 65,
-      fat: 12,
-      imageUrl: "https://images.unsplash.com/photo-1590301157890-4810ed352733?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
-      isHealthy: true,
-      tags: ["High protein", "Vegetarian"]
-    });
-
-    this.createMenuItem({
-      restaurantId: 1,
-      name: "Soft Tofu Soup",
-      description: "Tofu, vegetables, seafood, served with small bowl of rice",
-      calories: 310,
-      price: 10.90,
-      protein: 15,
-      carbs: 28,
-      fat: 8,
-      imageUrl: "https://images.unsplash.com/photo-1533007716222-4b465613a984?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
-      isHealthy: true,
-      tags: ["Low carb", "Seafood"]
-    });
-
-    this.createMenuItem({
-      restaurantId: 1,
-      name: "Bulgogi Lettuce Wraps",
-      description: "Marinated beef, lettuce leaves, vegetables, dipping sauce",
-      calories: 450,
-      price: 15.90,
-      protein: 28,
-      carbs: 18,
-      fat: 14,
-      imageUrl: "https://images.unsplash.com/photo-1635361184202-ecc9a435388c?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
-      isHealthy: true,
-      tags: ["Low carb", "High protein"]
-    });
+    await db.insert(menuItems).values([
+      {
+        restaurantId: seoulGarden.id,
+        name: "Veggie Bibimbap",
+        description: "Mixed vegetables, rice, egg, gochujang sauce",
+        calories: 420,
+        price: 12.90,
+        protein: 12,
+        carbs: 65,
+        fat: 12,
+        imageUrl: "https://images.unsplash.com/photo-1590301157890-4810ed352733?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
+        isHealthy: true,
+        tags: ["High protein", "Vegetarian"]
+      },
+      {
+        restaurantId: seoulGarden.id,
+        name: "Soft Tofu Soup",
+        description: "Tofu, vegetables, seafood, served with small bowl of rice",
+        calories: 310,
+        price: 10.90,
+        protein: 15,
+        carbs: 28,
+        fat: 8,
+        imageUrl: "https://images.unsplash.com/photo-1533007716222-4b465613a984?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
+        isHealthy: true,
+        tags: ["Low carb", "Seafood"]
+      },
+      {
+        restaurantId: seoulGarden.id,
+        name: "Bulgogi Lettuce Wraps",
+        description: "Marinated beef, lettuce leaves, vegetables, dipping sauce",
+        calories: 450,
+        price: 15.90,
+        protein: 28,
+        carbs: 18,
+        fat: 14,
+        imageUrl: "https://images.unsplash.com/photo-1635361184202-ecc9a435388c?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
+        isHealthy: true,
+        tags: ["Low carb", "High protein"]
+      }
+    ]);
 
     // Initialize menu items for K-Grill
-    this.createMenuItem({
-      restaurantId: 2,
-      name: "Chicken Bibimbap",
-      description: "Rice bowl with chicken, vegetables, and gochujang sauce",
-      calories: 580,
-      price: 14.90,
-      protein: 25,
-      carbs: 70,
-      fat: 18,
-      imageUrl: "https://images.unsplash.com/photo-1583502070936-ebbf8f60bc3d?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
-      isHealthy: true,
-      tags: ["Balanced meal", "High protein"]
-    });
-
-    this.createMenuItem({
-      restaurantId: 2,
-      name: "Bulgogi Lettuce Wraps",
-      description: "Korean BBQ beef served with lettuce leaves for wrapping",
-      calories: 450,
-      price: 16.90,
-      protein: 30,
-      carbs: 15,
-      fat: 18,
-      imageUrl: "https://images.unsplash.com/photo-1635361184202-ecc9a435388c?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
-      isHealthy: true,
-      tags: ["Low carb", "High protein"]
-    });
+    await db.insert(menuItems).values([
+      {
+        restaurantId: kGrill.id,
+        name: "Chicken Bibimbap",
+        description: "Rice bowl with chicken, vegetables, and gochujang sauce",
+        calories: 580,
+        price: 14.90,
+        protein: 25,
+        carbs: 70,
+        fat: 18,
+        imageUrl: "https://images.unsplash.com/photo-1583502070936-ebbf8f60bc3d?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
+        isHealthy: true,
+        tags: ["Balanced meal", "High protein"]
+      },
+      {
+        restaurantId: kGrill.id,
+        name: "Bulgogi Lettuce Wraps",
+        description: "Korean BBQ beef served with lettuce leaves for wrapping",
+        calories: 450,
+        price: 16.90,
+        protein: 30,
+        carbs: 15,
+        fat: 18,
+        imageUrl: "https://images.unsplash.com/photo-1635361184202-ecc9a435388c?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80",
+        isHealthy: true,
+        tags: ["Low carb", "High protein"]
+      }
+    ]);
 
     // Initialize walking directions
     const seoulGardenDirections: DirectionStep[] = [
@@ -271,8 +265,8 @@ export class MemStorage implements IStorage {
       }
     ];
 
-    this.createWalkingDirections({
-      restaurantId: 1,
+    await db.insert(walkingDirections).values({
+      restaurantId: seoulGarden.id,
       steps: seoulGardenDirections,
       totalDistanceMeters: 650,
       totalTimeMinutes: 8,
@@ -294,14 +288,17 @@ export class MemStorage implements IStorage {
       }
     ];
 
-    this.createWalkingDirections({
-      restaurantId: 2,
+    await db.insert(walkingDirections).values({
+      restaurantId: kGrill.id,
       steps: kGrillDirections,
       totalDistanceMeters: 250,
       totalTimeMinutes: 3,
       caloriesBurned: 18
     });
+
+    console.log("Database initialization complete");
   }
 }
 
-export const storage = new MemStorage();
+// Create and export the storage instance
+export const storage = new DatabaseStorage();
