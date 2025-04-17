@@ -10,6 +10,9 @@ import { db } from "./db";
 import { eq, and, lte } from "drizzle-orm";
 
 // Storage interface
+import session from "express-session";
+import connectPg from "connect-pg-simple";
+
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
@@ -32,9 +35,23 @@ export interface IStorage {
   // Walking directions operations
   getWalkingDirections(restaurantId: number): Promise<WalkingDirection | undefined>;
   createWalkingDirections(walkingDirection: InsertWalkingDirection): Promise<WalkingDirection>;
+  
+  // Session store for authentication
+  sessionStore: session.Store;
 }
 
 export class DatabaseStorage implements IStorage {
+  sessionStore: session.Store;
+  
+  constructor() {
+    const PostgresSessionStore = connectPg(session);
+    this.sessionStore = new PostgresSessionStore({
+      tableName: 'session',
+      createTableIfMissing: true,
+      pool: db.client
+    });
+  }
+  
   // User operations
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
