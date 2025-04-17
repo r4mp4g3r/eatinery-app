@@ -6,7 +6,7 @@ import {
   User, InsertUser,
   users, restaurants, menuItems, walkingDirections
 } from "@shared/schema";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, and, lte } from "drizzle-orm";
 
 // Storage interface
@@ -48,7 +48,7 @@ export class DatabaseStorage implements IStorage {
     this.sessionStore = new PostgresSessionStore({
       tableName: 'session',
       createTableIfMissing: true,
-      pool: db.client
+      pool: pool
     });
   }
   
