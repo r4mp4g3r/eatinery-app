@@ -67,15 +67,18 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+  // Use PORT from environment or default to 5000
+  // this serves both the API and the client
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+  
+  // Don't start server when deployed on Vercel (serverless)
+  if (process.env.VERCEL !== "1") {
+    server.listen({
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    }, () => {
+      log(`serving on port ${port}`);
+    });
+  }
 })();

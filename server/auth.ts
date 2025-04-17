@@ -33,6 +33,11 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  if (!process.env.SESSION_SECRET && process.env.NODE_ENV === "production") {
+    console.warn("WARNING: SESSION_SECRET is not set in production environment.");
+    console.warn("Please set a secure SESSION_SECRET in your environment variables.");
+  }
+  
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "eatinery-secret-key",
     resave: false,
@@ -40,7 +45,8 @@ export function setupAuth(app: Express) {
     store: storage.sessionStore,
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
     }
   };
 
