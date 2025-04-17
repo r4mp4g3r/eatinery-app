@@ -18,7 +18,7 @@ document.head.appendChild(fonts);
 
 // Add title
 const title = document.createElement('title');
-title.textContent = 'HealthEats - Find Healthy Restaurants Nearby';
+title.textContent = 'Eatinery - Find Healthy Restaurants Nearby';
 document.head.appendChild(title);
 
 createRoot(document.getElementById("root")!).render(<App />);

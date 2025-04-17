@@ -84,14 +84,14 @@ export default function RestaurantDetail() {
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
         <div className="h-40 bg-neutral-200 relative">
           <img 
-            src={restaurant.imageUrl} 
+            src={restaurant.imageUrl || "https://via.placeholder.com/600x400?text=Restaurant"} 
             alt={`${restaurant.name} restaurant`} 
             className="w-full h-full object-cover"
           />
           <Link href="/">
-            <a className="absolute top-4 left-4 p-2 rounded-full bg-white/80 backdrop-blur-sm">
+            <div className="absolute top-4 left-4 p-2 rounded-full bg-white/80 backdrop-blur-sm cursor-pointer">
               <ChevronLeft className="h-5 w-5 text-neutral-700" />
-            </a>
+            </div>
           </Link>
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
             {restaurant.isHpbHealthy && (
@@ -144,10 +144,10 @@ export default function RestaurantDetail() {
           
           <div className="flex space-x-3 mb-4">
             <Link href={`/restaurant/${restaurant.id}/directions`}>
-              <a className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm font-medium flex justify-center items-center">
+              <div className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm font-medium flex justify-center items-center cursor-pointer">
                 <Map className="h-5 w-5 mr-1" />
                 Walking Directions
-              </a>
+              </div>
             </Link>
             <Button variant="outline" size="icon" className="p-2.5">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-neutral-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -191,7 +191,7 @@ export default function RestaurantDetail() {
               <div key={menuItem.id} className="flex justify-between">
                 <div className="flex">
                   <img 
-                    src={menuItem.imageUrl} 
+                    src={menuItem.imageUrl || "https://via.placeholder.com/400x400?text=Food+Item"} 
                     alt={menuItem.name} 
                     className="w-20 h-20 rounded-lg object-cover" 
                   />
